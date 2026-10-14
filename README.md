@@ -16,13 +16,13 @@ Parameters
 
     s (seconds): Optional. Duration of the timer in seconds. For leeway, 3 seconds will be added to user assigned values.
     c (color): Optional. Text color of the timer in hex format (e.g., c=FF0000 for red). Default is a pastel yellow.
-    a (alarm): Optional. Alarm sound to play when the timer ends. Valid values are 0 (no alarm, default), 1 or 2.
+    a (alarm): Optional. Alarm sound to play when the timer ends. Defaults to 1 (sounds/1.mp3); use 0 to disable or 2 for sounds/2.mp3.
     v (volume): Optional. Volume of the alarm sound, ranging from 0 to 100. Default is 20.
 
 # Examples
 Note: most browsers require you to click somewhere on the page at least once for the sound to play successfully. At time of writing, OBS does not require any interaction for the sound to play, but please test on your own.
 The full link format with default parameters is
-```https://nakomaru.github.io/obs-browser-timer/timer.html?a=0&v=20&c=FFF788&s=22```
+```https://nakomaru.github.io/obs-browser-timer/timer.html?a=1&v=20&c=FFF788&s=22```
 
 simple 2 minute timer with default settings -> [timer.html?s=120](https://nakomaru.github.io/obs-browser-timer/timer.html?s=120)
 
@@ -39,3 +39,5 @@ simple 2 minute timer with default settings -> [timer.html?s=120](https://nakoma
 2.mp3 -> 09156 accent chime login.wav by Robinhood76 - [Link](https://freesound.org/s/528475/) - License: Attribution NonCommercial 4.0
 
 Everything else -> CC0
+
+# timer-presentasi
