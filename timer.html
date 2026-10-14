@@ -1,95 +1,328 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Droid+Sans" />
     <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Roboto" />
-    <title>Timer</title>
+    <title>Timer Presentasi</title>
     <style>
-        /* Customize the styling as needed */
         body {
-            font-family: 'Roboto', sans-serif; /* Use Roboto font */
-            background-color: transparent; /* Set a transparent background */
+            font-family: 'Roboto', sans-serif;
+            background-color: transparent; /* transparan agar bisa dipakai di OBS */
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            height: 100vh; /* Center vertically */
+            height: 100vh;
             margin: 0px auto;
             overflow: hidden;
         }
         #countdown {
-            font-size: 90px; /* Increase font size */
-            color: #FFF788; /* Default pastel yellow color */
-            text-shadow: 4px 4px 6px black, -4px 4px 6px black, -4px -4px 6px black, 4px -4px 6px black, 4px 0px 6px black, -4px 0px 6px black, 0px 4px 6px black, 0px -4px 6px black; /* Add a black outline */
-            text-align: center; /* Center horizontally */
-            overflow: hidden; /* Hide scrollbars */
+            font-size: 90px;
+            color: #FFF788; /* kuning pastel (default) */
+            text-shadow: 4px 4px 6px black, -4px 4px 6px black, -4px -4px 6px black, 4px -4px 6px black, 4px 0px 6px black, -4px 0px 6px black, 0px 4px 6px black, 0px -4px 6px black;
+            text-align: center;
+            overflow: hidden;
             font-weight: bold;
-            padding: 15px; /* Add padding to allow for blurry shadow */
+            padding: 15px;
+        }
+        #countdown p { margin: 0; }
+        #controls, #setPanel {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: -8px;
+        }
+        #setPanel {
+            margin-top: 8px;
+            color: white;
+            font: 14px 'Roboto', sans-serif;
+            text-shadow: 1px 1px 3px black;
+        }
+        #setPanel[hidden], #controls[hidden] { display: none; }
+        button, input {
+            font: 14px 'Roboto', sans-serif;
+        }
+        button {
+            min-width: 76px;
+            padding: 7px 10px;
+            border: 1px solid rgba(255, 255, 255, 0.75);
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.65);
+            color: white;
+            cursor: pointer;
+        }
+        button:hover { background: rgba(0, 0, 0, 0.85); }
+        button:focus-visible, input:focus-visible {
+            outline: 2px solid #FFF788;
+            outline-offset: 2px;
+        }
+        input {
+            width: 56px;
+            padding: 6px 6px;
+            border: 1px solid rgba(255, 255, 255, 0.75);
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.65);
+            color: white;
+            text-align: center;
         }
     </style>
 </head>
 <body>
     <div id="countdown"></div>
+
+    <div id="controls">
+        <button id="toggleButton" type="button">Jeda</button>
+        <button id="resetButton" type="button">Reset</button>
+        <button id="soundButton" type="button" aria-pressed="true">Suara: On</button>
+        <button id="setButton" type="button" aria-expanded="false">Atur Waktu</button>
+    </div>
+
+    <div id="setPanel" hidden>
+        <input id="minInput" type="number" min="0" max="999" step="1" value="5" aria-label="Menit">
+        <span>menit</span>
+        <input id="secInput" type="number" min="0" max="59" step="1" value="0" aria-label="Detik">
+        <span>detik</span>
+        <button id="applyButton" type="button" style="min-width:60px">Mulai</button>
+    </div>
+
     <script>
-        // Get the countdown duration in seconds from URL parameter (e.g., ?s=180)
+        /*
+         * Parameter URL:
+         *   s  = durasi dalam detik            (contoh: s=300)
+         *   m  = durasi dalam menit            (contoh: m=5, bisa digabung dengan s)
+         *   c  = warna teks hex 6 digit        (default FFF788)
+         *   a  = alarm saat waktu habis        (1 = aktif, 0 = mati)
+         *   w  = suara peringatan 3 detik akhir (1 = aktif, 0 = mati)
+         *   v  = volume 0-100                  (default 20)
+         *   ui = tampilkan tombol kontrol      (1 = tampil, 0 = sembunyi)
+         */
+        const WARNING_MS = 3000;
         const urlParams = new URLSearchParams(window.location.search);
-        const qSeconds = parseInt(urlParams.get('s')) + 3 || 25; // Default to 25 seconds if not specified, otherwise add 3s for leeway to input
-        const qAlarm = parseInt(urlParams.get('a')) || 0; // Default to alarm = 0 (off), valid numbers 1-5
-        const qVolume = parseInt(urlParams.get('v')) || 20; // Default to volume = 20%, valid numbers 0-100
-        const qTextColor = urlParams.get('c') || "FFF788"; // Default to FFF788 if not provided
-        const targetTime = new Date().getTime() + qSeconds * 1000;
-        
-        // adds # if it's missing
-        const cSanitizedColor = `#${qTextColor.replace(/^#/, '')}`;
-        
-        function isValidHexColor(pColor) {
-            const hexRegex = /^#[0-9A-Fa-f]{6}$/;
-            return hexRegex.test(pColor);
-        }
-        if (isValidHexColor(cSanitizedColor)) {
-            //Apply the specified text color to the text
-            document.getElementById('countdown').style.color = cSanitizedColor;
+
+        function readInt(name, fallback) {
+            const n = Number.parseInt(urlParams.get(name), 10);
+            return Number.isFinite(n) && n >= 0 ? n : fallback;
         }
 
-        function playSound(pAlarm = 0, pVolume = 20) {
-            // Validate 'a' to be within the range 1-5
-            if (pAlarm >= 1 && pAlarm <= 2) {
-                const audioElement = new Audio(`sounds/${pAlarm}.mp3`);
-                audioElement.volume = pVolume / 100; // Convert v to a decimal value
-                audioElement.play();
-            }
+        const DEFAULT_SECONDS = 300; // 5 menit jika tidak ada s/m di URL
+        let durationSec = readInt('m', 0) * 60 + readInt('s', 0);
+        if (durationSec <= 0) durationSec = DEFAULT_SECONDS;
+
+        const alarmEnabledByUrl = urlParams.get('a') !== '0';
+        const warningEnabledByUrl = urlParams.get('w') !== '0';
+        const qVolume = Math.min(100, readInt('v', 20));
+        const qTextColor = urlParams.get('c') || 'FFF788';
+
+        const countdown = document.getElementById('countdown');
+        const controls = document.getElementById('controls');
+        const toggleButton = document.getElementById('toggleButton');
+        const resetButton = document.getElementById('resetButton');
+        const soundButton = document.getElementById('soundButton');
+        const setButton = document.getElementById('setButton');
+        const setPanel = document.getElementById('setPanel');
+        const minInput = document.getElementById('minInput');
+        const secInput = document.getElementById('secInput');
+        const applyButton = document.getElementById('applyButton');
+
+        let remainingMs = durationSec * 1000;
+        let startedAt = Date.now();
+        let isRunning = true;
+        let soundEnabled = alarmEnabledByUrl || warningEnabledByUrl;
+        let warningPlayed = false;
+        let alarmPlayed = false;
+        let timerId;
+
+        // ---------- Tampilan ----------
+        const sanitizedColor = `#${qTextColor.replace(/^#/, '')}`;
+        if (/^#[0-9A-Fa-f]{6}$/.test(sanitizedColor)) {
+            countdown.style.color = sanitizedColor;
         }
+        if (urlParams.get('ui') === '0') {
+            controls.hidden = true;
+        }
+
+        // ---------- Audio ----------
+        // File suara dimuat di awal supaya langsung bunyi tepat waktu.
+        const warningAudio = new Audio('sounds/3.mp3');
+        const alarmAudio = new Audio('sounds/1.mp3');
+        [warningAudio, alarmAudio].forEach(a => {
+            a.preload = 'auto';
+            a.volume = qVolume / 100;
+        });
+
+        // Cadangan: jika sounds/3.mp3 gagal dimuat, pakai bunyi "bip" sederhana.
+        let warningFileFailed = false;
+        warningAudio.addEventListener('error', () => { warningFileFailed = true; });
+        let audioCtx;
+        function beep() {
+            try {
+                audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.frequency.value = 880;
+                gain.gain.value = (qVolume / 100) * 0.5;
+                osc.connect(gain).connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+            } catch (e) { /* abaikan */ }
+        }
+
+        function stopAudio(a) {
+            a.pause();
+            a.currentTime = 0;
+        }
+
+        // Browser biasa mewajibkan klik sekali sebelum audio boleh bunyi.
+        // Klik pertama di halaman "membuka kunci" audio (OBS tidak butuh ini).
+        let unlocked = false;
+        function unlockAudio() {
+            if (unlocked) return;
+            unlocked = true;
+            [warningAudio, alarmAudio].forEach(a => {
+                a.muted = true;
+                a.play().then(() => { stopAudio(a); a.muted = false; })
+                        .catch(() => { a.muted = false; });
+            });
+        }
+        document.addEventListener('pointerdown', unlockAudio, { once: true });
+
+        function playWarning() {
+            if (warningFileFailed) { beep(); return; }
+            stopAudio(warningAudio);
+            warningAudio.play().catch(() => beep());
+        }
+
+        // ---------- Logika timer ----------
+        function getRemaining() {
+            return Math.max(0, remainingMs - (isRunning ? Date.now() - startedAt : 0));
+        }
+
         function updateCountdown() {
-            const now = new Date().getTime();
-            const vTimeRemaining = targetTime - now;
-            const vHours = Math.floor(vTimeRemaining / (1000 * 60 * 60));
-            const vMinutes = Math.floor((vTimeRemaining % (1000 * 60 * 60)) / (1000 * 60));
-            const vSeconds = Math.floor((vTimeRemaining % (1000 * 60)) / 1000);
+            const t = getRemaining();
+            const h = Math.floor(t / 3600000);
+            const m = Math.floor((t % 3600000) / 60000);
+            const s = Math.floor((t % 60000) / 1000);
 
-            if (vHours > 0) {
-                document.getElementById('countdown').innerHTML = `<p>${vHours.toString().padStart(2, '0')}:${vMinutes.toString().padStart(2, '0')}:${vSeconds.toString().padStart(2, '0')}</p>`;
-                setTimeout(updateCountdown, 250); // Update every 250 ms for vHours
-            } else if (vMinutes > 0 || vSeconds > 19) {
-                document.getElementById('countdown').innerHTML = `<p>${vMinutes.toString().padStart(2, '0')}:${vSeconds.toString().padStart(2, '0')}</p>`;
-                setTimeout(updateCountdown, 250); // Update every 250 ms for 30s+
-            } else if (vTimeRemaining > 0) {
-                const vTenthseconds = Math.floor((vTimeRemaining / 100) % 10);
-                document.getElementById('countdown').innerHTML = `<p>${vSeconds.toString().padStart(1, '0')}.${vTenthseconds.toString().padStart(1, '0')}</p>`;
-                setTimeout(updateCountdown, 25); // Update every 25 ms for the last 20s
+            if (h > 0) {
+                countdown.innerHTML = `<p>${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}</p>`;
+            } else if (m > 0 || s > 19) {
+                countdown.innerHTML = `<p>${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}</p>`;
+            } else if (t > 0) {
+                const tenths = Math.floor((t / 100) % 10);
+                countdown.innerHTML = `<p>${s}.${tenths}</p>`;
             } else {
-                document.getElementById('countdown').innerHTML = `<p>0.0</p>`;
-                playSound(qAlarm, qVolume);
+                countdown.innerHTML = '<p>0.0</p>';
             }
+
+            // Suara peringatan: sekali, saat sisa waktu masuk 3 detik terakhir
+            if (isRunning && t > 0 && t <= WARNING_MS && !warningPlayed) {
+                warningPlayed = true;
+                if (soundEnabled && warningEnabledByUrl) playWarning();
+            }
+
+            if (t <= 0) {
+                remainingMs = 0;
+                isRunning = false;
+                toggleButton.textContent = 'Mulai';
+                if (!alarmPlayed) {
+                    alarmPlayed = true;
+                    if (soundEnabled && alarmEnabledByUrl) {
+                        stopAudio(alarmAudio);
+                        alarmAudio.play().catch(() => {});
+                    }
+                }
+                return;
+            }
+
+            timerId = setTimeout(updateCountdown, t <= 20000 ? 25 : 250);
         }
 
+        function startFresh(seconds) {
+            clearTimeout(timerId);
+            stopAudio(warningAudio);
+            stopAudio(alarmAudio);
+            durationSec = seconds;
+            remainingMs = seconds * 1000;
+            startedAt = Date.now();
+            isRunning = true;
+            warningPlayed = false;
+            alarmPlayed = false;
+            toggleButton.textContent = 'Jeda';
+            updateCountdown();
+        }
+
+        // ---------- Tombol ----------
+        toggleButton.addEventListener('click', () => {
+            if (isRunning) {
+                remainingMs = Math.max(0, remainingMs - (Date.now() - startedAt));
+                isRunning = false;
+                clearTimeout(timerId);
+                // Jeda: hentikan suara peringatan, bunyi lagi saat dilanjutkan
+                stopAudio(warningAudio);
+                if (remainingMs > 0) warningPlayed = false;
+                toggleButton.textContent = 'Mulai';
+                updateCountdown();
+            } else if (remainingMs > 0) {
+                startedAt = Date.now();
+                isRunning = true;
+                toggleButton.textContent = 'Jeda';
+                updateCountdown();
+            }
+        });
+
+        resetButton.addEventListener('click', () => startFresh(durationSec));
+
+        soundButton.addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            soundButton.textContent = soundEnabled ? 'Suara: On' : 'Suara: Off';
+            soundButton.setAttribute('aria-pressed', String(soundEnabled));
+            if (!soundEnabled) {
+                stopAudio(warningAudio);
+                stopAudio(alarmAudio);
+            }
+        });
+
+        // ---------- Atur waktu ----------
+        function syncInputs() {
+            minInput.value = Math.floor(durationSec / 60);
+            secInput.value = durationSec % 60;
+        }
+
+        setButton.addEventListener('click', () => {
+            setPanel.hidden = !setPanel.hidden;
+            setButton.setAttribute('aria-expanded', String(!setPanel.hidden));
+            if (!setPanel.hidden) { syncInputs(); minInput.focus(); minInput.select(); }
+        });
+
+        function applyTime() {
+            const mins = Math.min(999, Math.max(0, Number.parseInt(minInput.value, 10) || 0));
+            const secs = Math.max(0, Number.parseInt(secInput.value, 10) || 0);
+            const total = mins * 60 + secs;
+            if (total <= 0) { minInput.focus(); return; }
+
+            // Simpan ke URL supaya waktu tetap sama saat halaman dimuat ulang
+            try {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('m');
+                url.searchParams.set('s', String(total));
+                history.replaceState(null, '', url);
+            } catch (e) { /* abaikan jika tidak didukung */ }
+
+            startFresh(total);
+            syncInputs();
+            setPanel.hidden = true;
+            setButton.setAttribute('aria-expanded', 'false');
+        }
+
+        applyButton.addEventListener('click', applyTime);
+        [minInput, secInput].forEach(el =>
+            el.addEventListener('keydown', e => { if (e.key === 'Enter') applyTime(); })
+        );
+
+        syncInputs();
         updateCountdown();
     </script>
 </body>
 </html>
-
-<!--
-Sound Licenses
-notification1-freesound.wav by Thoribass -- https://freesound.org/s/253595/ -- License: Attribution 4.0
-09156 accent chime login.wav by Robinhood76 -- https://freesound.org/s/528475/ -- License: Attribution NonCommercial 4.0
--->
